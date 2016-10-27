@@ -33,6 +33,10 @@
 #	include "hmd_ovr.h"
 #endif // BGFX_CONFIG_USE_OVR
 
+#if BGFX_CONFIG_USE_OPENVR
+#   include "hmd_openvr.h"
+#endif // BGFX_CONFIG_USE_OPENVR
+
 namespace bgfx { namespace d3d11
 {
 	static wchar_t s_viewNameW[BGFX_CONFIG_MAX_VIEWS][BGFX_CONFIG_MAX_VIEW_NAME];
@@ -629,6 +633,31 @@ namespace bgfx { namespace d3d11
 	};
 #endif // BGFX_CONFIG_USE_OVR
 
+#if BGFX_CONFIG_USE_OPENVR
+	class VRImplOpenVRD3D11 : public VRImplOpenVR
+	{
+	public:
+		VRImplOpenVRD3D11();
+
+		virtual bool createSwapChain(const VRDesc& _desc, int _msaaSamples, int _mirrorWidth, int _mirrorHeight) BX_OVERRIDE;
+		virtual void destroySwapChain() BX_OVERRIDE;
+		virtual void destroyMirror() BX_OVERRIDE;
+		virtual void renderEyeStart(const VRDesc& _desc, uint8_t _eye) BX_OVERRIDE;
+		virtual bool submitSwapChain(const VRDesc& _desc) BX_OVERRIDE;
+
+	private:
+		static const int c_textureCount = 3;
+		int m_currentTexture;
+		ID3D11Texture2D* m_eyeTexture[2][c_textureCount];
+		ID3D11RenderTargetView* m_eyeRtv[2][c_textureCount];
+		ID3D11ShaderResourceView* m_eyeSv[2][c_textureCount];
+		ID3D11DepthStencilView* m_depthBuffer[2];
+		ID3D11Texture2D* m_msaaTexture[2];
+		ID3D11ShaderResourceView* m_msaaSv[2];
+		ID3D11RenderTargetView* m_msaaRtv[2];
+	};
+#endif // BGFX_CONFIG_USE_OPENVR
+
 	struct RendererContextD3D11 : public RendererContextI
 	{
 		RendererContextD3D11()
@@ -694,9 +723,13 @@ namespace bgfx { namespace d3d11
 #if BGFX_CONFIG_USE_OVR
 			vrImpl = &m_ovrRender;
 #endif // BGFX_CONFIG_USE_OVR
-			m_ovr.init(vrImpl);
+#if BGFX_CONFIG_USE_OPENVR
+			vrImpl = &m_openvrRenderer;
+#endif // BGFX_CONFIG_USE_OPENVR
 
-			if (!m_ovr.isInitialized() )
+			m_vr.init(vrImpl);
+
+			if (!m_vr.isInitialized() )
 			{
 				m_renderdocdll = loadRenderDoc();
 			}
@@ -1270,7 +1303,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 					| BGFX_CAPS_FRAGMENT_DEPTH
 					| (getIntelExtensions(m_device) ? BGFX_CAPS_FRAGMENT_ORDERING : 0)
 					| BGFX_CAPS_SWAP_CHAIN
-					| (m_ovr.isInitialized() ? BGFX_CAPS_HMD : 0)
+					| (m_vr.isInitialized() ? BGFX_CAPS_HMD : 0)
 					| BGFX_CAPS_DRAW_INDIRECT
 					| BGFX_CAPS_TEXTURE_BLIT
 					| BGFX_CAPS_TEXTURE_READ_BACK
@@ -1650,7 +1683,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 				bx::dlclose(m_agsdll);
 				m_agsdll = NULL;
 				unloadRenderDoc(m_renderdocdll);
-				m_ovr.shutdown();
+				m_vr.shutdown();
 				break;
 			}
 
@@ -1662,7 +1695,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 			BGFX_GPU_PROFILER_UNBIND();
 
 			preReset();
-			m_ovr.shutdown();
+			m_vr.shutdown();
 
 			if (NULL != m_ags)
 			{
@@ -2141,7 +2174,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 
 		void preReset()
 		{
-			ovrPreReset();
+			vrPreReset();
 
 			if (m_timerQuerySupport)
 			{
@@ -2197,10 +2230,10 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 			}
 			m_occlusionQuery.postReset();
 
-			ovrPostReset();
+			vrPostReset();
 
 			// If OVR doesn't create separate depth stencil view, create default one.
-			if (!m_ovr.isEnabled() && NULL == m_backBufferDepthStencil)
+			if (!m_vr.isEnabled() && NULL == m_backBufferDepthStencil)
 			{
 				D3D11_TEXTURE2D_DESC dsd;
 				dsd.Width  = getBufferWidth();
@@ -2260,10 +2293,10 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 
 				if (SUCCEEDED(hr) )
 				{
-					m_ovr.flip();
-					m_ovr.swap(_hmd); // TODO - move this out of end-of-frame
+					m_vr.flip();
+					m_vr.swap(_hmd); // TODO - move this out of end-of-frame
 
-					if (!m_ovr.isEnabled())
+					if (!m_vr.isEnabled())
 					{
 						hr = m_swapChain->Present(syncInterval, 0);
 					}
@@ -2438,7 +2471,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 						SwapChainDesc* scd = &m_scd;
 						SwapChainDesc swapChainScd;
 						if (0 != (m_resolution.m_flags & BGFX_RESET_HMD)
-						&&  m_ovr.isInitialized() )
+						&&  m_vr.isInitialized() )
 						{
 							swapChainScd = m_scd;
 							swapChainScd.SampleDesc = s_msaa[0];
@@ -2499,7 +2532,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 
 			if (recenter)
 			{
-				m_ovr.recenter();
+				m_vr.recenter();
 			}
 
 			return false;
@@ -3177,22 +3210,18 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 			return srv;
 		}
 
-		void ovrPostReset()
+		void vrPostReset()
 		{
-#if BGFX_CONFIG_USE_OVR
 			if (m_resolution.m_flags & (BGFX_RESET_HMD|BGFX_RESET_HMD_DEBUG) )
 			{
 				const uint32_t msaaSamples = 1 << ((m_resolution.m_flags&BGFX_RESET_MSAA_MASK) >> BGFX_RESET_MSAA_SHIFT);
-				m_ovr.postReset(msaaSamples, m_resolution.m_width, m_resolution.m_height);
+				m_vr.postReset(msaaSamples, m_resolution.m_width, m_resolution.m_height);
 			}
-#endif // BGFX_CONFIG_USE_OVR
 		}
 
-		void ovrPreReset()
+		void vrPreReset()
 		{
-#if BGFX_CONFIG_USE_OVR
-			m_ovr.preReset();
-#endif // BGFX_CONFIG_USE_OVR
+			m_vr.preReset();
 		}
 
 		void capturePostReset()
@@ -3582,10 +3611,13 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 		bool m_rtMsaa;
 		bool m_timerQuerySupport;
 
-		VR m_ovr;
+		VR m_vr;
 #if BGFX_CONFIG_USE_OVR
 		VRImplOVRD3D11 m_ovrRender;
 #endif // BGFX_CONFIG_USE_OVR
+#if BGFX_CONFIG_USE_OPENVR
+		VRImplOpenVRD3D11 m_openvrRenderer;
+#endif
 	};
 
 	static RendererContextD3D11* s_renderD3D11;
@@ -3882,6 +3914,225 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 	}
 
 #endif // BGFX_CONFIG_USE_OVR
+
+#if BGFX_CONFIG_USE_OPENVR
+
+	VRImplOpenVRD3D11::VRImplOpenVRD3D11()
+		: m_currentTexture(0)
+	{
+		memset(m_eyeRtv, 0, sizeof(m_eyeRtv));
+		memset(m_eyeTexture, 0, sizeof(m_eyeTexture));
+		memset(m_eyeSv, 0, sizeof(m_eyeSv));
+		memset(m_msaaRtv, 0, sizeof(m_msaaRtv));
+		memset(m_msaaSv, 0, sizeof(m_msaaSv));
+		memset(m_msaaTexture, 0, sizeof(m_msaaTexture));
+	}
+
+	bool VRImplOpenVRD3D11::createSwapChain(const VRDesc& _desc, int _msaaSamples, int _mirrorWidth, int _mirrorHeight)
+	{
+		BX_UNUSED(_mirrorWidth, _mirrorHeight);
+		ID3D11Device* device = s_renderD3D11->m_device;
+
+		for (int eye = 0; eye < 2; ++eye)
+		{
+			if (NULL == m_eyeRtv[eye][0])
+			{
+				m_msaaTexture[eye] = NULL;
+				m_msaaRtv[eye] = NULL;
+				m_msaaSv[eye] = NULL;
+
+				const int eyeWidth = _desc.m_eyeSize[eye].m_w;
+				const int eyeHeight = _desc.m_eyeSize[eye].m_h;
+
+				for (int texIndex = 0; texIndex < c_textureCount; ++texIndex) {
+					D3D11_TEXTURE2D_DESC textureDesc;
+					ZeroMemory(&textureDesc, sizeof(textureDesc));
+
+					// Setup the render target texture description.
+					textureDesc.Width = eyeWidth;
+					textureDesc.Height = eyeHeight;
+					textureDesc.MipLevels = 1;
+					textureDesc.ArraySize = 1;
+					textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+					textureDesc.SampleDesc.Count = 1;
+					textureDesc.Usage = D3D11_USAGE_DEFAULT;
+					textureDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+					textureDesc.CPUAccessFlags = 0;
+					textureDesc.MiscFlags = 0;
+
+					// Create the render target texture.
+					DX_CHECK(device->CreateTexture2D(&textureDesc, NULL, &m_eyeTexture[eye][texIndex]));
+
+					D3D11_RENDER_TARGET_VIEW_DESC rtvd = {};
+					rtvd.Format = textureDesc.Format;
+					rtvd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+
+					ID3D11RenderTargetView* rtv;
+					DX_CHECK(device->CreateRenderTargetView(m_eyeTexture[eye][texIndex], &rtvd, &rtv));
+					m_eyeRtv[eye][texIndex] = rtv;
+
+					D3D11_SHADER_RESOURCE_VIEW_DESC shaderResourceViewDesc;
+					shaderResourceViewDesc.Format = textureDesc.Format;
+					shaderResourceViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+					shaderResourceViewDesc.Texture2D.MostDetailedMip = 0;
+					shaderResourceViewDesc.Texture2D.MipLevels = 1;
+
+					// Create the shader resource view.
+					DX_CHECK(device->CreateShaderResourceView(m_eyeTexture[eye][texIndex], &shaderResourceViewDesc, &m_eyeSv[eye][texIndex]));
+				}
+
+				// setup depth buffer
+				D3D11_TEXTURE2D_DESC dbDesc;
+				dbDesc.Width = eyeWidth;
+				dbDesc.Height = eyeHeight;
+				dbDesc.MipLevels = 1;
+				dbDesc.ArraySize = 1;
+				dbDesc.Format = DXGI_FORMAT_D32_FLOAT;
+				dbDesc.SampleDesc.Count = _msaaSamples;
+				dbDesc.SampleDesc.Quality = 0;
+				dbDesc.Usage = D3D11_USAGE_DEFAULT;
+				dbDesc.CPUAccessFlags = 0;
+				dbDesc.MiscFlags = 0;
+				dbDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+				ID3D11Texture2D* depthTex;
+				DX_CHECK(device->CreateTexture2D(&dbDesc, NULL, &depthTex));
+				//DX_RELEASE(depthTex, 1);
+
+				DX_CHECK(device->CreateDepthStencilView(depthTex, NULL, &m_depthBuffer[eye]));
+				DX_RELEASE(depthTex, 0);
+
+				// create MSAA render target
+				if (_msaaSamples > 1)
+				{
+					D3D11_TEXTURE2D_DESC dsDesc;
+					dsDesc.Width = _desc.m_eyeSize[eye].m_w;
+					dsDesc.Height = _desc.m_eyeSize[eye].m_h;
+					dsDesc.MipLevels = 1;
+					dsDesc.ArraySize = 1;
+					dsDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+					dsDesc.SampleDesc.Count = _msaaSamples;
+					dsDesc.SampleDesc.Quality = 0;
+					dsDesc.Usage = D3D11_USAGE_DEFAULT;
+					dsDesc.CPUAccessFlags = 0;
+					dsDesc.MiscFlags = 0;
+					dsDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+
+					DX_CHECK(device->CreateTexture2D(&dsDesc, NULL, &m_msaaTexture[eye]));
+					DX_CHECK(device->CreateShaderResourceView(m_msaaTexture[eye], NULL, &m_msaaSv[eye]));
+					DX_CHECK(device->CreateRenderTargetView(m_msaaTexture[eye], NULL, &m_msaaRtv[eye]));
+				}
+			}
+		}
+
+		return true;
+	}
+
+	void VRImplOpenVRD3D11::destroySwapChain()
+	{
+		for (int eye = 0; eye < 2; ++eye)
+		{
+			if (m_eyeRtv[eye])
+			{
+				for (int texIndex = 0; texIndex < c_textureCount; ++texIndex)
+				{
+					DX_RELEASE(m_eyeRtv[eye][texIndex], 0);
+					DX_RELEASE(m_eyeSv[eye][texIndex], 0);
+					DX_RELEASE(m_eyeTexture[eye][texIndex], 0);
+					m_eyeRtv[eye][texIndex] = NULL;
+					m_eyeTexture[eye][texIndex] = NULL;
+				}
+
+				m_depthBuffer[eye]->Release();
+
+				if (NULL != m_msaaTexture[eye])
+				{
+					m_msaaTexture[eye]->Release();
+					m_msaaTexture[eye] = NULL;
+				}
+
+				if (NULL != m_msaaSv[eye])
+				{
+					m_msaaSv[eye]->Release();
+					m_msaaSv[eye] = NULL;
+				}
+
+				if (NULL != m_msaaRtv[eye])
+				{
+					m_msaaRtv[eye]->Release();
+					m_msaaRtv[eye] = NULL;
+				}
+			}
+		}
+
+		destroyMirror();
+	}
+
+	void VRImplOpenVRD3D11::destroyMirror()
+	{
+	}
+
+	void VRImplOpenVRD3D11::renderEyeStart(const VRDesc& _desc, uint8_t _eye)
+	{
+		ID3D11DeviceContext* deviceCtx = s_renderD3D11->m_deviceCtx;
+		float black[] = { 0.0f, 0.0f, 0.0f, 0.0f }; // Important that alpha=0, if want pixels to be transparent, for manual layers
+
+													// render to MSAA target
+		if (NULL != m_msaaTexture[_eye])
+		{
+			deviceCtx->OMSetRenderTargets(1, &m_msaaRtv[_eye], m_depthBuffer[_eye]);
+			deviceCtx->ClearRenderTargetView(m_msaaRtv[_eye], black);
+			deviceCtx->ClearDepthStencilView(m_depthBuffer[_eye], D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+		}
+		else // MSAA disabled? render directly to eye buffer
+		{
+			deviceCtx->OMSetRenderTargets(1, &m_eyeRtv[_eye][m_currentTexture], m_depthBuffer[_eye]);
+			deviceCtx->ClearRenderTargetView(m_eyeRtv[_eye][m_currentTexture], black);
+			deviceCtx->ClearDepthStencilView(m_depthBuffer[_eye], D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+
+			D3D11_VIEWPORT D3Dvp;
+			D3Dvp.TopLeftX = 0;
+			D3Dvp.TopLeftY = 0;
+			D3Dvp.Width = (FLOAT)_desc.m_eyeSize[_eye].m_w;
+			D3Dvp.Height = (FLOAT)_desc.m_eyeSize[_eye].m_h;
+			D3Dvp.MinDepth = 0;
+			D3Dvp.MaxDepth = 1;
+			deviceCtx->RSSetViewports(1, &D3Dvp);
+		}
+	}
+
+	bool VRImplOpenVRD3D11::submitSwapChain(const VRDesc& /* _desc */)
+	{
+		ID3D11DeviceContext* deviceCtx = s_renderD3D11->m_deviceCtx;
+
+		for (int eye = 0; eye < 2; ++eye)
+		{
+			if (NULL != m_msaaTexture[eye])
+			{
+				// Resolve MSAA target
+				deviceCtx->ResolveSubresource(m_eyeTexture[eye][m_currentTexture], 0, m_msaaTexture[eye], 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+			}
+
+			Texture_t vr_tex = { m_eyeTexture[eye][m_currentTexture], EGraphicsAPIConvention_API_DirectX, EColorSpace_ColorSpace_Auto };
+			m_compositor->Submit((EVREye)eye, &vr_tex, NULL, EVRSubmitFlags_Submit_Default);
+		}
+
+		m_currentTexture = (m_currentTexture + 1) % c_textureCount;
+
+#if 0
+		IDXGISwapChain* swapChain = s_renderD3D11->m_swapChain;
+		ID3D11Texture2D* backBuffer;
+		DX_CHECK(swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer)));
+
+		deviceCtx->CopyResource(backBuffer, m_eyeTexture[0][m_currentTexture]);
+		DX_CHECK(swapChain->Present(0, 0));
+
+		DX_RELEASE(backBuffer, 0);
+#endif
+
+		return true;
+	}
+
+#endif // BGFX_CONFIG_USE_OPENVR
 
 	struct UavFormat
 	{
@@ -5234,9 +5485,9 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 		currentState.m_stateFlags = BGFX_STATE_NONE;
 		currentState.m_stencil = packStencil(BGFX_STENCIL_NONE, BGFX_STENCIL_NONE);
 
-		_render->m_hmdInitialized = m_ovr.isInitialized();
+		_render->m_hmdInitialized = m_vr.isInitialized();
 
-		const bool hmdEnabled = m_ovr.isEnabled();
+		const bool hmdEnabled = m_vr.isEnabled();
 		static ViewState viewState;
 		viewState.reset(_render, hmdEnabled);
 
@@ -5361,9 +5612,9 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 								);
 						}
 
-						if (m_ovr.isEnabled() )
+						if (m_vr.isEnabled() )
 						{
-							m_ovr.renderEyeStart(eye, &viewState.m_rect);
+							m_vr.renderEyeStart(eye, &viewState.m_rect);
 						}
 						else
 						{
@@ -6224,7 +6475,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 					, !!(m_resolution.m_flags&BGFX_RESET_VSYNC) ? '\xfe' : ' '
 					, 0 != msaa ? '\xfe' : ' '
 					, 1<<msaa
-					, m_ovr.isInitialized() ? hmd : ", no-HMD "
+					, m_vr.isInitialized() ? hmd : ", no-HMD "
 					, !!(m_resolution.m_flags&BGFX_RESET_MAXANISOTROPY) ? '\xfe' : ' '
 					);
 

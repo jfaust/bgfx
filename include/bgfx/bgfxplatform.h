@@ -46,12 +46,13 @@ namespace bgfx
 	///
 	struct PlatformData
 	{
-		void* ndt;          //!< Native display type.
-		void* nwh;          //!< Native window handle.
-		void* context;      //!< GL context, or D3D device.
-		void* backBuffer;   //!< GL backbuffer, or D3D render target view.
-		void* backBufferDS; //!< Backbuffer depth/stencil.
-		void* session;      //!< ovrSession, for Oculus SDK
+		void* ndt;           //!< Native display type.
+		void* nwh;           //!< Native window handle.
+		void* context;       //!< GL context, or D3D device.
+		void* backBuffer;    //!< GL backbuffer, or D3D render target view.
+		void* backBufferDS;  //!< Backbuffer depth/stencil.
+		void* ovrSession;   //!< ovrSession, for Oculus SDK
+		intptr_t openvrToken; //!< Initialization token, for OpenVR SDK
 	};
 
 	/// Set platform data.

@@ -14,6 +14,11 @@ newoption {
 }
 
 newoption {
+	trigger = "with-openvr",
+	description = "Enable OpenVR integration.",
+}
+
+newoption {
 	trigger = "with-sdl",
 	description = "Enable SDL entry.",
 }

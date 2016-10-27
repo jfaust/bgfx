@@ -102,6 +102,13 @@ function bgfxProject(_name, _kind, _defines)
 			configuration {}
 		end
 
+		if _OPTIONS["with-openvr"] then
+			defines {
+				"BGFX_CONFIG_MULTITHREADED=0",
+				"BGFX_CONFIG_USE_OPENVR=1",
+			}
+		end
+
 		configuration { "Debug" }
 			defines {
 				"BGFX_CONFIG_DEBUG=1",

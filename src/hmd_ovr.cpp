@@ -30,7 +30,7 @@ namespace bgfx
 
 	VRImplOVR::~VRImplOVR()
 	{
-		if (NULL != g_platformData.session)
+		if (NULL != g_platformData.ovrSession)
 		{
 			return;
 		}
@@ -40,7 +40,7 @@ namespace bgfx
 
 	bool VRImplOVR::init()
 	{
-		if (NULL != g_platformData.session)
+		if (NULL != g_platformData.ovrSession)
 		{
 			return true;
 		}
@@ -57,7 +57,7 @@ namespace bgfx
 
 	void VRImplOVR::shutdown()
 	{
-		if (NULL != g_platformData.session)
+		if (NULL != g_platformData.ovrSession)
 		{
 			return;
 		}
@@ -67,7 +67,7 @@ namespace bgfx
 
 	void VRImplOVR::connect(VRDesc* _desc)
 	{
-		if (NULL == g_platformData.session)
+		if (NULL == g_platformData.ovrSession)
 		{
 			ovrGraphicsLuid luid;
 			ovrResult result = ovr_Create(&m_session, &luid);
@@ -79,7 +79,7 @@ namespace bgfx
 		}
 		else
 		{
-			m_session = (ovrSession)g_platformData.session;
+			m_session = (ovrSession)g_platformData.ovrSession;
 		}
 
 		ovrHmdDesc hmdDesc = ovr_GetHmdDesc(m_session);
@@ -137,7 +137,7 @@ namespace bgfx
 
 	void VRImplOVR::disconnect()
 	{
-		if (NULL != g_platformData.session)
+		if (NULL != g_platformData.ovrSession)
 		{
 			return;
 		}

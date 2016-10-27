@@ -39,7 +39,8 @@ typedef struct bgfx_platform_data
     void* context;
     void* backBuffer;
     void* backBufferDS;
-    void* session;
+    void* ovrSession;
+	intptr_t openvrToken;
 
 } bgfx_platform_data_t;
 

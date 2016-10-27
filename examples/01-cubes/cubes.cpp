@@ -29,14 +29,14 @@ bgfx::VertexDecl PosColorVertex::ms_decl;
 
 static PosColorVertex s_cubeVertices[8] =
 {
-	{-1.0f,  1.0f,  1.0f, 0xff000000 },
-	{ 1.0f,  1.0f,  1.0f, 0xff0000ff },
-	{-1.0f, -1.0f,  1.0f, 0xff00ff00 },
-	{ 1.0f, -1.0f,  1.0f, 0xff00ffff },
-	{-1.0f,  1.0f, -1.0f, 0xffff0000 },
-	{ 1.0f,  1.0f, -1.0f, 0xffff00ff },
-	{-1.0f, -1.0f, -1.0f, 0xffffff00 },
-	{ 1.0f, -1.0f, -1.0f, 0xffffffff },
+	{-0.1f,  0.1f,  0.1f, 0xff000000 },
+	{ 0.1f,  0.1f,  0.1f, 0xff0000ff },
+	{-0.1f, -0.1f,  0.1f, 0xff00ff00 },
+	{ 0.1f, -0.1f,  0.1f, 0xff00ffff },
+	{-0.1f,  0.1f, -0.1f, 0xffff0000 },
+	{ 0.1f,  0.1f, -0.1f, 0xffff00ff },
+	{-0.1f, -0.1f, -0.1f, 0xffffff00 },
+	{ 0.1f, -0.1f, -0.1f, 0xffffffff },
 };
 
 static const uint16_t s_cubeIndices[36] =
@@ -142,7 +142,7 @@ class ExampleCubes : public entry::AppI
 			if (NULL != hmd && 0 != (hmd->flags & BGFX_HMD_RENDERING) )
 			{
 				float view[16];
-				bx::mtxQuatTranslationHMD(view, hmd->eye[0].rotation, eye);
+				bx::mtxQuatTranslation(view, hmd->eye[0].rotation, hmd->eye[0].translation);
 				bgfx::setViewTransform(0, view, hmd->eye[0].projection, BGFX_VIEW_STEREO, hmd->eye[1].projection);
 
 				// Set view 0 default viewport.
@@ -175,9 +175,9 @@ class ExampleCubes : public entry::AppI
 				{
 					float mtx[16];
 					bx::mtxRotateXY(mtx, time + xx*0.21f, time + yy*0.37f);
-					mtx[12] = -15.0f + float(xx)*3.0f;
-					mtx[13] = -15.0f + float(yy)*3.0f;
-					mtx[14] = 0.0f;
+					mtx[12] = -1.5f + float(xx)*0.3f;
+					mtx[13] = -1.5f + float(yy)*0.3f;
+					mtx[14] = 1.0f;
 
 					// Set model matrix for rendering.
 					bgfx::setTransform(mtx);
