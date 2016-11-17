@@ -14,6 +14,11 @@ newoption {
 }
 
 newoption {
+	trigger = "with-openvr",
+	description = "Enable OpenVR integration.",
+}
+
+newoption {
 	trigger = "with-sdl",
 	description = "Enable SDL entry.",
 }
@@ -187,6 +192,22 @@ function exampleProject(_name)
 
 		configuration { "x32 or x64" }
 			links { "libovr" }
+
+		configuration {}
+	end
+
+	if _OPTIONS["with-openvr"] then
+		configuration { "x32" }
+			libdirs {
+				"$(OPENVR_DIR)/lib/win32/",
+			}
+		configuration { "x64" }
+			libdirs {
+				"$(OPENVR_DIR)/lib/win64",
+			}
+		links {
+			"openvr_api",
+		}
 
 		configuration {}
 	end

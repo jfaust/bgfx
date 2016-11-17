@@ -165,6 +165,11 @@
 #	define BGFX_CONFIG_USE_OVR 0
 #endif // BGFX_CONFIG_USE_OVR
 
+/// Enable OpenVR integration
+#ifndef BGFX_CONFIG_USE_OPENVR
+#	define BGFX_CONFIG_USE_OPENVR 0
+#endif // BGFX_CONFIG_USE_OPENVR
+
 /// Enable nVidia PerfHUD integration.
 #ifndef BGFX_CONFIG_DEBUG_PERFHUD
 #	define BGFX_CONFIG_DEBUG_PERFHUD 0

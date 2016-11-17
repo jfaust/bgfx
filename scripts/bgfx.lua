@@ -102,6 +102,16 @@ function bgfxProject(_name, _kind, _defines)
 			configuration {}
 		end
 
+		if _OPTIONS["with-openvr"] then
+			defines {
+				"BGFX_CONFIG_USE_OPENVR=1",
+			}
+			includedirs {
+				"$(OPENVR_DIR)/headers",
+			}
+			configuration {}
+		end
+
 		configuration { "Debug" }
 			defines {
 				"BGFX_CONFIG_DEBUG=1",
