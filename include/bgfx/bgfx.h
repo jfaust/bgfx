@@ -695,7 +695,14 @@ namespace bgfx
 			float pixelsPerTanAngle[2]; //!< Number of pixels that fit in tan(angle) = 1.
 		};
 
+		struct HeadTracking
+		{
+			float rotation[4];
+			float position[3];
+		};
+
 		Eye eye[2];
+		HeadTracking headTracking;
 		uint16_t width;        //!< Framebuffer width.
 		uint16_t height;       //!< Framebuffer width.
 		uint32_t deviceWidth;  //!< Device resolution width

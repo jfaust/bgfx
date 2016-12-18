@@ -220,7 +220,7 @@ namespace bgfx
 			if (headPose.eTrackingResult == vr::TrackingResult_Running_OK)
 			{
 				// convert to position/quat
-				hmd.eye[0].translation.position[0] = headPose.mDeviceToAbsoluteTracking.m[0][3];
+				hmd.eye[0].translation[0] = headPose.mDeviceToAbsoluteTracking.m[0][3];
 				hmd.headTracking.position[1] = headPose.mDeviceToAbsoluteTracking.m[1][3];
 				hmd.headTracking.position[2] = headPose.mDeviceToAbsoluteTracking.m[2][3];
 				openvrTransformToQuat(hmd.headTracking.rotation, headPose.mDeviceToAbsoluteTracking.m);
