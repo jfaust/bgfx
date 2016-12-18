@@ -245,6 +245,10 @@ namespace bgfx
 	{
 		m_system->ResetSeatedZeroPose();
 	}
+
+	void VRImplOpenVR::updateInput(HMD& /* _hmd */)
+	{
+	}
 }
 
 #endif // BGFX_CONFIG_USE_OPENVR
